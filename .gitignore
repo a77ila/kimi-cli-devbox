@@ -1,0 +1,12 @@
+.docker_data/
+.idea/
+/dist
+
+# Kimi Code per-machine local config (skills/ is committed; local.toml is not).
+.kimi-code/local.toml
+
+# Add language-specific build outputs below, for example:
+# /src/target
+# /node_modules
+# /__pycache__
+# *.pyc

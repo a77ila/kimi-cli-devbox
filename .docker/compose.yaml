@@ -1,0 +1,24 @@
+services:
+  kimi-cli:
+    container_name: kimi-cli
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - KIMI_VERSION=${KIMI_VERSION:-latest}
+    working_dir: /workspace
+    environment:
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+    volumes:
+      # Mount the repository root into the container.
+      - ..:/workspace
+      # Persist Kimi/home directory data across sessions.
+      - ../.docker_data/kimi-home:/home/kimi
+      # Add language-specific caches here, for example:
+      # - ../.docker_data/cargo-registry:/usr/local/cargo/registry
+      # - ../.docker_data/cargo-git:/usr/local/cargo/git
+      # - ../.docker_data/npm-cache:/home/kimi/.npm
+    stdin_open: true
+    tty: true
+    command: kimi
