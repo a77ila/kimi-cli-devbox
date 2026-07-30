@@ -6,18 +6,50 @@ on:
   pull_request:
 
 jobs:
-  check:
-    name: Verify project files
+  lint-and-test:
+    name: Lint and test launcher scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check required boilerplate files exist
+      - name: Check required files exist
         run: |
-          test -f src/INSTRUCTIONS.md
-          test -f src/AGENTS.md
+          test -f AGENTS.md
           test -f CHANGELOG.md
           test -x run-kimi.sh
+          test -x scripts/select-project.sh
+          test -f projects.yaml.example
+          test -f .docker/Dockerfile
+          test -f .docker/compose.yaml
+          test -f .docker/entrypoint.sh
 
-      # Replace this job with your project's CI (tests, lint, build, etc.)
-      # once you have populated src/INSTRUCTIONS.md and added your code.
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: Lint shell scripts
+        run: shellcheck run-kimi.sh scripts/select-project.sh .docker/entrypoint.sh
+
+      - name: Test project selector
+        run: |
+          cat > /tmp/test-projects.yaml <<'EOF'
+          projects:
+            - name: foo
+              root: /tmp/foo
+              agents: /tmp/foo-agents
+            - name: bar
+              root: /tmp/bar
+          EOF
+          mkdir -p /tmp/foo /tmp/bar /tmp/foo-agents
+          printf '2\n' | ./scripts/select-project.sh /tmp/test-projects.yaml | grep -q 'name:   bar'
+
+  docker-build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t kimi-cli-devbox-check .docker
+
+      - name: Verify image starts
+        run: docker run --rm kimi-cli-devbox-check bash -c 'kimi --version'

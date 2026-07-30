@@ -19,6 +19,24 @@ if [ "$(id -g "$USERNAME")" != "$USER_GID" ]; then
   groupmod -g "$USER_GID" "$USERNAME"
 fi
 
+# Isolate Kimi runtime data per project when PROJECT_NAME is provided.
+if [ -n "${PROJECT_NAME:-}" ]; then
+  KIMI_CODE_HOME="/home/kimi/.kimi-code/${PROJECT_NAME}"
+  mkdir -p "$KIMI_CODE_HOME"
+  export KIMI_CODE_HOME
+fi
+
+# Surface AI instruction files at the workspace root without touching the real
+# project directory on the host.  Symlinks are created inside the container only.
+if [ -d /workspace/.kimi-code ]; then
+  if [ -f /workspace/.kimi-code/AGENTS.md ] && [ ! -e /workspace/AGENTS.md ]; then
+    ln -s .kimi-code/AGENTS.md /workspace/AGENTS.md
+  fi
+  if [ -f /workspace/.kimi-code/INSTRUCTIONS.md ] && [ ! -e /workspace/INSTRUCTIONS.md ]; then
+    ln -s .kimi-code/INSTRUCTIONS.md /workspace/INSTRUCTIONS.md
+  fi
+fi
+
 # Ensure the workspace and home directory are writable by the user.
 chown -R "$USER_UID:$USER_GID" /workspace /home/"$USERNAME" 2>/dev/null || true
 

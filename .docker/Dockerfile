@@ -3,7 +3,7 @@
 
 FROM alpine:3.20
 
-ENV PATH=/usr/local/bin:/usr/bin:/bin
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Base tools used by most projects. Add your language toolchain here.
 RUN apk add --no-cache \

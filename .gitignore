@@ -2,6 +2,10 @@
 .idea/
 /dist
 
+# Per-user project list and generated agents directories.
+/projects.yaml
+/kimi-agents/
+
 # Kimi Code per-machine local config (skills/ is committed; local.toml is not).
 .kimi-code/local.toml
 

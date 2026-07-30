@@ -1,6 +1,6 @@
 services:
-  kimi-cli:
-    container_name: kimi-cli
+  isolated-kimi-cli:
+    container_name: isolated-kimi-cli-${PROJECT_NAME:?PROJECT_NAME is not set}
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,15 +10,17 @@ services:
     environment:
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}
+      - PROJECT_NAME=${PROJECT_NAME:?PROJECT_NAME is not set}
+      - KIMI_CODE_HOME=/home/kimi/.kimi-code/${PROJECT_NAME}
     volumes:
-      # Mount the repository root into the container.
-      - ..:/workspace
-      # Persist Kimi/home directory data across sessions.
+      # The selected project root becomes the workspace.
+      - ${PROJECT_ROOT_DIR:?PROJECT_ROOT_DIR is not set}:/workspace
+      # AI-related files live in a separate directory, mounted as the
+      # project-local .kimi-code configuration.
+      - ${PROJECT_AGENTS_DIR:?PROJECT_AGENTS_DIR is not set}:/workspace/.kimi-code
+      # Persist the whole kimi user home directory across sessions.  Kimi
+      # runtime data is isolated per project via KIMI_CODE_HOME.
       - ../.docker_data/kimi-home:/home/kimi
-      # Add language-specific caches here, for example:
-      # - ../.docker_data/cargo-registry:/usr/local/cargo/registry
-      # - ../.docker_data/cargo-git:/usr/local/cargo/git
-      # - ../.docker_data/npm-cache:/home/kimi/.npm
     stdin_open: true
     tty: true
     command: kimi
