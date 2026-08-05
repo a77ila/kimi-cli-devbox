@@ -90,11 +90,15 @@ For the selected project:
   as the project-local configuration without adding files to the real project.
 - The Kimi data directory is isolated under
   `.docker_data/kimi-home/<project-name>` via `KIMI_CODE_HOME`.
+- The terminal window/tab title is set to `kimi: <project-name>` so concurrent
+  sessions are easy to tell apart.
 
 If the agents directory contains `AGENTS.md` or `INSTRUCTIONS.md` and the
 project root does not already have those files, the container entrypoint creates
-symlinks inside `/workspace` so Kimi can find them.  These symlinks exist only
-inside the container.
+symlinks at the workspace root so Kimi can find them.  Because `/workspace` is a
+bind mount of the real project, these symlinks (and the empty `.kimi-code`
+mountpoint) are also visible on the host; the symlinks remain as dangling links
+after the container exits and are reused on the next start.
 
 ## Project configuration
 
@@ -128,13 +132,13 @@ project, not in the project repository itself:
 kimi-agents/my-app/
 ├── AGENTS.md              # project-level agent instructions
 ├── INSTRUCTIONS.md        # project definition the AI reads first
-└── .kimi-code/
-    └── agents/
-        └── reviewer.md    # custom sub-agent
+└── agents/
+    └── reviewer.md        # custom sub-agent
 ```
 
 When the container starts, `/workspace/.kimi-code` points to this directory, so
-Kimi discovers the project-level files automatically.
+Kimi discovers the project-level files automatically (the custom agent lands at
+`/workspace/.kimi-code/agents/reviewer.md`).
 
 ## Useful commands
 

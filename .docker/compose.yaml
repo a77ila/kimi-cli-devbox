@@ -1,6 +1,9 @@
 services:
   isolated-kimi-cli:
     container_name: isolated-kimi-cli-${PROJECT_NAME:?PROJECT_NAME is not set}
+    # Fixed image name so every project shares a single image and the
+    # build-if-missing check in run-kimi.sh works regardless of project.
+    image: kimi-cli-devbox:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,16 +14,15 @@ services:
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}
       - PROJECT_NAME=${PROJECT_NAME:?PROJECT_NAME is not set}
-      - KIMI_CODE_HOME=/home/kimi/.kimi-code/${PROJECT_NAME}
+      - KIMI_CODE_HOME=/home/kimi/.kimi-code
     volumes:
       # The selected project root becomes the workspace.
       - ${PROJECT_ROOT_DIR:?PROJECT_ROOT_DIR is not set}:/workspace
       # AI-related files live in a separate directory, mounted as the
       # project-local .kimi-code configuration.
       - ${PROJECT_AGENTS_DIR:?PROJECT_AGENTS_DIR is not set}:/workspace/.kimi-code
-      # Persist the whole kimi user home directory across sessions.  Kimi
-      # runtime data is isolated per project via KIMI_CODE_HOME.
-      - ../.docker_data/kimi-home:/home/kimi
+      # Persist a separate kimi user home directory per selected project.
+      - ../.docker_data/kimi-home/${PROJECT_NAME:?PROJECT_NAME is not set}:/home/kimi
     stdin_open: true
     tty: true
     command: kimi

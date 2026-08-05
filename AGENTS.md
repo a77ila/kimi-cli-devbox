@@ -16,11 +16,14 @@ projects via `projects.yaml`.  When you run `./run-kimi.sh`, the launcher asks
 which project to open and mounts the project root plus a separate agents
 directory into the container.
 
-The target project directory is never modified by the launcher on the host.
-AI-related files live in the agents directory, which is mounted as
-`/workspace/.kimi-code` inside the container.  Kimi runtime data (sessions,
-config, credentials) is isolated per project under
-`.docker_data/kimi-home/<project-name>`.
+The target project directory is almost never modified by the launcher on the
+host.  The only exceptions come from the bind-mounted workspace: the entrypoint
+may create `AGENTS.md`/`INSTRUCTIONS.md` symlinks at the project root (visible
+on the host, dangling after the container exits), and Docker creates the empty
+`.kimi-code` mountpoint directory there.  AI-related files themselves live in
+the agents directory, which is mounted as `/workspace/.kimi-code` inside the
+container.  Kimi runtime data (sessions, config, credentials) is isolated per
+project under `.docker_data/kimi-home/<project-name>`.
 
 ## Goals
 
@@ -64,12 +67,23 @@ config, credentials) is isolated per project under
 - `$PROJECT_AGENTS_DIR` is mounted at `/workspace/.kimi-code`.
 - The Kimi home base is mounted at `/home/kimi`; the actual Kimi data directory
   is a per-project subdirectory selected by `PROJECT_NAME`.
+- Before the container starts, `run-kimi.sh` sets the terminal window/tab
+  title to `kimi: <PROJECT_NAME>` via an OSC escape written to `/dev/tty`.
 
 ### 4. AI file discovery
 
 - If the agents directory contains `AGENTS.md` or `INSTRUCTIONS.md` and the
-  workspace root does not already have those files, the entrypoint creates
-  in-container symlinks so Kimi can discover them.
+  workspace root does not already have those files (including as a symlink),
+  the entrypoint creates in-container symlinks so Kimi can discover them.
+  Because `/workspace` is a bind mount, the links are also visible on the host
+  and remain there after the container exits; existing links are left alone.
+
+### 5. Docker image
+
+- All projects share a single image tagged `kimi-cli-devbox:latest`
+  (the `image:` key in `.docker/compose.yaml`).
+- `./run-kimi.sh build` builds it with plain `docker build` — no project
+  selection required.  The default run path builds it only if missing.
 
 ## Non-Functional Requirements
 

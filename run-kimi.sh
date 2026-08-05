@@ -11,6 +11,9 @@ DEVBOX_ROOT="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_FILE="$DEVBOX_ROOT/.docker/compose.yaml"
 SERVICE_NAME="isolated-kimi-cli"
 SELECT_PROJECT_SCRIPT="$DEVBOX_ROOT/scripts/select-project.sh"
+# Keep in sync with the `image:` key in .docker/compose.yaml.  A fixed name
+# means all projects share one image.
+IMAGE_NAME="kimi-cli-devbox:latest"
 
 # Match the in-container user to the host user so files created in /workspace
 # are owned by the host user instead of root.
@@ -102,19 +105,41 @@ ensure_paths() {
   fi
 
   mkdir -p "$PROJECT_AGENTS_DIR"
+  mkdir -p "$DEVBOX_ROOT/.docker_data/kimi-home/$PROJECT_NAME"
+}
+
+# Show the project name in the terminal window/tab title so multiple
+# concurrent Kimi sessions are easy to tell apart.  The OSC escape is sent
+# to /dev/tty so it never pollutes piped command output.
+set_terminal_title() {
+  if [[ -w /dev/tty ]]; then
+    printf '\033]0;kimi: %s\007' "$PROJECT_NAME" > /dev/tty 2>/dev/null || true
+  fi
 }
 
 run_container() {
   # Use a project-specific Compose project name so multiple projects can run
   # at the same time without container-name collisions.
+  set_terminal_title
   exec docker compose \
     --file "$COMPOSE_FILE" \
     --project-name "kimi-${PROJECT_NAME}" \
     run --rm "$SERVICE_NAME" "$@"
 }
 
+# Build the image with plain docker build so no project selection (and no
+# Compose variable interpolation) is required.  Tags the same fixed image
+# name that compose.yaml references.
+build_image() {
+  docker build \
+    --build-arg "KIMI_VERSION=${KIMI_VERSION}" \
+    --tag "$IMAGE_NAME" \
+    --no-cache \
+    "$DEVBOX_ROOT/.docker"
+}
+
 # Make sure the persistent home parent directory exists before compose tries to
-# mount it.
+# mount project-specific Kimi home directories.
 mkdir -p "$DEVBOX_ROOT/.docker_data/kimi-home"
 
 if [[ "$#" -gt 0 ]]; then
@@ -125,7 +150,8 @@ if [[ "$#" -gt 0 ]]; then
       ;;
 
     build)
-      exec docker compose --file "$COMPOSE_FILE" build "$SERVICE_NAME"
+      build_image
+      exit
       ;;
 
     shell)
@@ -148,9 +174,8 @@ ensure_paths
 
 # Build only if the image does not already exist. Run `./run-kimi.sh build` to
 # force a rebuild after changing the Dockerfile or context.
-image_name=$(docker compose --file "$COMPOSE_FILE" --project-name "kimi-${PROJECT_NAME}" config --images | awk -v svc="$SERVICE_NAME" '$1 == svc {print $2}')
-if [[ -z "$image_name" ]] || ! docker image inspect "$image_name" >/dev/null 2>&1; then
-  docker compose --file "$COMPOSE_FILE" --project-name "kimi-${PROJECT_NAME}" build "$SERVICE_NAME"
+if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+  build_image
 fi
 
 run_container
