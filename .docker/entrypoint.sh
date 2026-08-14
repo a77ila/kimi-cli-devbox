@@ -24,20 +24,6 @@ KIMI_CODE_HOME="${KIMI_CODE_HOME:-/home/kimi/.kimi-code}"
 mkdir -p "$KIMI_CODE_HOME"
 export KIMI_CODE_HOME
 
-# Surface AI instruction files at the workspace root.  /workspace is a bind
-# mount of the real project directory, so these symlinks (and the .kimi-code
-# mountpoint Docker creates) are also visible on the host while the container
-# runs, and remain there as dangling links after it exits.  The -L check keeps
-# a stale link from a previous run from breaking ln -s.
-if [ -d /workspace/.kimi-code ]; then
-  if [ -f /workspace/.kimi-code/AGENTS.md ] && [ ! -e /workspace/AGENTS.md ] && [ ! -L /workspace/AGENTS.md ]; then
-    ln -s .kimi-code/AGENTS.md /workspace/AGENTS.md
-  fi
-  if [ -f /workspace/.kimi-code/INSTRUCTIONS.md ] && [ ! -e /workspace/INSTRUCTIONS.md ] && [ ! -L /workspace/INSTRUCTIONS.md ]; then
-    ln -s .kimi-code/INSTRUCTIONS.md /workspace/INSTRUCTIONS.md
-  fi
-fi
-
 # Ensure the mounted home directory is writable by the user.  /workspace is
 # deliberately NOT chowned: it is the user's real project and its ownership
 # must be left alone.
