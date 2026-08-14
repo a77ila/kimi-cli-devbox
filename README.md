@@ -93,12 +93,9 @@ For the selected project:
 - The terminal window/tab title is set to `kimi: <project-name>` so concurrent
   sessions are easy to tell apart.
 
-If the agents directory contains `AGENTS.md` or `INSTRUCTIONS.md` and the
-project root does not already have those files, the container entrypoint creates
-symlinks at the workspace root so Kimi can find them.  Because `/workspace` is a
-bind mount of the real project, these symlinks (and the empty `.kimi-code`
-mountpoint) are also visible on the host; the symlinks remain as dangling links
-after the container exits and are reused on the next start.
+The launcher never adds files to the real project directory.  The only
+exception is the empty `.kimi-code` mountpoint directory that Docker creates
+at the project root for the agents-directory bind mount.
 
 ## Project configuration
 
@@ -138,7 +135,9 @@ kimi-agents/my-app/
 
 When the container starts, `/workspace/.kimi-code` points to this directory, so
 Kimi discovers the project-level files automatically (the custom agent lands at
-`/workspace/.kimi-code/agents/reviewer.md`).
+`/workspace/.kimi-code/agents/reviewer.md`).  The launcher does not copy or
+link anything into the project root — if a project needs a root-level
+`AGENTS.md`, it should live in the project repository itself.
 
 ## Useful commands
 

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2] - 2026-08-14
+
+### Removed
+
+- The container entrypoint no longer creates `AGENTS.md`/`INSTRUCTIONS.md`
+  symlinks at the workspace root.  The launcher now never modifies the project
+  root (Docker may still create the empty `.kimi-code` mountpoint); a
+  root-level `AGENTS.md` should live in the project repository itself.
+  Stale symlinks left by previous runs are not cleaned up automatically —
+  remove them manually.
+
 ## [0.2.1] - 2026-08-05
 
 ### Added

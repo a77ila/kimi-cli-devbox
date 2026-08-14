@@ -16,14 +16,13 @@ projects via `projects.yaml`.  When you run `./run-kimi.sh`, the launcher asks
 which project to open and mounts the project root plus a separate agents
 directory into the container.
 
-The target project directory is almost never modified by the launcher on the
-host.  The only exceptions come from the bind-mounted workspace: the entrypoint
-may create `AGENTS.md`/`INSTRUCTIONS.md` symlinks at the project root (visible
-on the host, dangling after the container exits), and Docker creates the empty
-`.kimi-code` mountpoint directory there.  AI-related files themselves live in
-the agents directory, which is mounted as `/workspace/.kimi-code` inside the
-container.  Kimi runtime data (sessions, config, credentials) is isolated per
-project under `.docker_data/kimi-home/<project-name>`.
+The target project directory is never modified by the launcher on the host.
+The only exception is the empty `.kimi-code` mountpoint directory that Docker
+creates at the project root for the agents-directory bind mount.  AI-related
+files themselves live in the agents directory, which is mounted as
+`/workspace/.kimi-code` inside the container.  Kimi runtime data (sessions,
+config, credentials) is isolated per project under
+`.docker_data/kimi-home/<project-name>`.
 
 ## Goals
 
@@ -72,11 +71,9 @@ project under `.docker_data/kimi-home/<project-name>`.
 
 ### 4. AI file discovery
 
-- If the agents directory contains `AGENTS.md` or `INSTRUCTIONS.md` and the
-  workspace root does not already have those files (including as a symlink),
-  the entrypoint creates in-container symlinks so Kimi can discover them.
-  Because `/workspace` is a bind mount, the links are also visible on the host
-  and remain there after the container exits; existing links are left alone.
+- The launcher never creates files or symlinks in the project root.  Kimi
+  discovers the agents directory via the `/workspace/.kimi-code` mount; a
+  root-level `AGENTS.md` must live in the project repository itself.
 
 ### 5. Docker image
 
