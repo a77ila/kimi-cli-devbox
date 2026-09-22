@@ -1,7 +1,7 @@
 # Generic development container for the Kimi Code CLI.
 # Extend this image with the language runtimes and tools your project needs.
 
-FROM alpine:3.20
+FROM alpine:3.22
 
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -15,8 +15,11 @@ RUN apk add --no-cache \
     nodejs \
     npm \
     shadow \
+    shellcheck \
     su-exec \
-    sudo
+    sudo \
+    python3 \
+;
 
 # Install the Kimi Code CLI globally.
 # Override at build time with: --build-arg KIMI_VERSION=x.y.z
