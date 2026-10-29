@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Projects can declare their Compose files, env files, and target service in
+  `projects.yaml`; Kimi then runs in an image layered on the selected service's
+  image without adding Kimi files to the project repository.
+- Added `./run-kimi.sh build-project` to rebuild both the project service and
+  its Kimi image layer.
+
+### Fixed
+
+- The entrypoint handles project images that already use the host UID/GID.
+- The standalone project selector returns a failure status for invalid config.
+
 ## [0.2.3] - 2026-09-22
 
 ### Changed

@@ -1,25 +1,34 @@
 # projects.yaml - list of projects managed by this Kimi launcher.
 #
-# Copy this file to projects.yaml and edit the paths.  projects.yaml is
+# Copy this file to projects.yaml and edit the paths. projects.yaml is
 # gitignored so each machine can keep its own list.
-#
-# Schema:
-#   projects:
-#     - name: <short-project-name>
-#       root: <absolute-or-relative-path-to-project-root>
-#       agents: <absolute-or-relative-path-to-ai-files>  # optional
 #
 # Rules:
 #   - name and root are required; agents is optional.
 #   - name must contain only lowercase letters, digits, underscores, and hyphens.
 #   - If agents is omitted, it defaults to <launcher-root>/kimi-agents/<name>.
-#   - Relative paths are resolved against the launcher repository root.
+#   - Relative root and agents paths are resolved against the launcher root.
+#   - Compose and env file paths are resolved against the project root.
 #   - ~ is expanded to the current user's home directory.
 
 projects:
+  # Uses the shared kimi-cli-devbox:latest image.
   - name: example-project
     root: ~/src/example-project
     agents: ~/kimi-agents/example-project
+
+  # Uses the image built for the app service by the project's Compose files.
+  # Kimi is layered onto that image; no Kimi files are added to the project.
+  - name: project_a
+    root: ~/src/project_a
+    service: app
+    compose_project: project_a  # optional; defaults to name
+    compose_files:
+      - compose.yaml
+      - compose.override.dev.yaml
+    env_files:                  # optional
+      - .env
+      - .env.dev
 
   - name: another-project
     root: /absolute/path/to/another-project

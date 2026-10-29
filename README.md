@@ -117,8 +117,61 @@ Rules:
 - `name` and `root` are required.
 - `name` must contain only lowercase letters, digits, underscores, and hyphens.
 - If `agents` is omitted, it defaults to `<devbox-root>/kimi-agents/<name>`.
-- Relative paths are resolved against the devbox repository root.
+- Relative root and agents paths are resolved against the devbox repository root.
 - `~` is expanded to the current user's home directory.
+
+Projects without Compose options use the shared `kimi-cli-devbox:latest` image,
+as before.
+
+### Use a project's own Docker environment
+
+Declare the same Compose files, env files, and Compose project name used by the
+project's normal startup script.  Set `service` to the service whose image
+contains the development tools the project needs:
+
+```yaml
+projects:
+  - name: project_a
+    root: ~/src/project_a
+    service: app
+    compose_project: project_a   # optional; defaults to name
+    compose_files:
+      - compose.yaml
+      - compose.override.dev.yaml
+    env_files:                   # optional
+      - .env
+      - .env.dev
+```
+
+Compose and env file paths are resolved against the project root.  The launcher
+uses Compose's rendered configuration for `service` to resolve its image, so no
+separate `base_image` setting is needed.  It then builds
+`kimi-<project-name>:latest` on top of that image using
+`.docker/Dockerfile.kimi`.
+
+Build or rebuild both layers after changing the project image:
+
+```bash
+./run-kimi.sh build-project
+```
+
+On the first normal launch, the Kimi layer is built automatically if missing.
+The project service itself is not rebuilt implicitly; use `build-project` or
+the project's own startup script for that.
+
+The devbox-owned `.docker/compose.project.yaml` adds the Kimi service to the
+same Compose project.  It joins the project's default network, while
+`--no-deps` prevents `docker compose run` from starting the rest of the stack.
+The project's application services and files are not modified.
+
+The env files are passed to Compose for variable interpolation.  They are not
+automatically injected into the Kimi container's process environment.  The
+Kimi service also does not inherit application-specific volumes, environment,
+or custom network attachments from the selected service.
+
+The generic Kimi layer supports Alpine- and Debian/Ubuntu-based images.  Other
+base distributions need their package installation commands added to
+`.docker/Dockerfile.kimi` first.
 
 ## AI files for a project
 
@@ -142,10 +195,11 @@ link anything into the project root — if a project needs a root-level
 ## Useful commands
 
 ```bash
-./run-kimi.sh            # start an interactive Kimi session for a project
-./run-kimi.sh build      # build (or rebuild) the Docker image
-./run-kimi.sh shell      # open a shell in the selected project's container
-./run-kimi.sh <command>  # run any command inside the selected project's container
+./run-kimi.sh                # start an interactive Kimi session for a project
+./run-kimi.sh build          # build (or rebuild) the shared Docker image
+./run-kimi.sh build-project  # rebuild a Compose project and its Kimi image
+./run-kimi.sh shell          # open a shell in the selected project's container
+./run-kimi.sh <command>      # run any command inside the selected project's container
 ```
 
 You can skip the interactive project prompt by exporting the selection before
@@ -153,10 +207,11 @@ running the script, as shown in Example 2 above.
 
 ## Customising the environment
 
-- `.docker/Dockerfile` — based on `alpine:3.20`; add language runtimes,
-  compilers, package managers, and system dependencies.
-- `.docker/compose.yaml` — mount project directories, caches, and persistent
-  volumes.  Project mounts are driven by environment variables set by
+- `.docker/Dockerfile` — based on `alpine:3.22`; provides the shared image.
+- `.docker/Dockerfile.kimi` — adds Kimi on top of a Compose project's image.
+- `.docker/compose.yaml` — shared-image service and project mounts.
+- `.docker/compose.project.yaml` — Kimi service appended to a project's own
+  Compose files.  Project mounts are driven by environment variables set by
   `run-kimi.sh`.
 - `.docker/entrypoint.sh` — runs as root to match the in-container `kimi`
   user's UID/GID to the host user, isolates `KIMI_CODE_HOME` per project, then

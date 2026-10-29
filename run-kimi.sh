@@ -2,21 +2,15 @@
 set -euo pipefail
 
 # Launcher for the Dockerised Kimi Code CLI.
-#
-# This script reads projects.yaml (gitignored) and mounts an external project
-# into the container so the target project never needs its own copy of the
-# devbox boilerplate.
 
 DEVBOX_ROOT="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_FILE="$DEVBOX_ROOT/.docker/compose.yaml"
+PROJECT_COMPOSE_FILE="$DEVBOX_ROOT/.docker/compose.project.yaml"
 SERVICE_NAME="isolated-kimi-cli"
 SELECT_PROJECT_SCRIPT="$DEVBOX_ROOT/scripts/select-project.sh"
-# Keep in sync with the `image:` key in .docker/compose.yaml.  A fixed name
-# means all projects share one image.
 IMAGE_NAME="kimi-cli-devbox:latest"
 
-# Match the in-container user to the host user so files created in /workspace
-# are owned by the host user instead of root.
+export DEVBOX_ROOT
 export USER_UID=${USER_UID:-$(id -u)}
 export USER_GID=${USER_GID:-$(id -g)}
 export KIMI_VERSION=${KIMI_VERSION:-latest}
@@ -34,7 +28,10 @@ Commands:
       Show this help message.
 
   build
-      Build (or rebuild) the Docker image.
+      Build (or rebuild) the shared Docker image. No project selection needed.
+
+  build-project
+      Build the selected project's Compose service and its Kimi image.
 
   shell
       Open an interactive shell in the container for the selected project.
@@ -49,7 +46,7 @@ If no command is provided, an interactive Kimi session is started for the
 selected project.
 
 Project selection:
-  The project is chosen from projects.yaml.  You can skip the interactive
+  The project is chosen from projects.yaml. You can skip the interactive
   prompt by exporting these variables before calling the script:
 
     PROJECT_NAME          Short name of the project (must match projects.yaml)
@@ -57,9 +54,13 @@ Project selection:
     PROJECT_AGENTS_DIR    Absolute path to the agents directory for AI files
                           (optional)
 
-  When PROJECT_AGENTS_DIR is omitted — either from the environment or from
-  projects.yaml — it defaults to:
+  When PROJECT_AGENTS_DIR is omitted it defaults to:
     <devbox-root>/kimi-agents/<PROJECT_NAME>
+
+  Compose-based projects can additionally set PROJECT_SERVICE,
+  PROJECT_COMPOSE_PROJECT, PROJECT_COMPOSE_FILES, and PROJECT_ENV_FILES.
+  The two file-list variables contain one path per line; relative paths are
+  resolved against PROJECT_ROOT_DIR.
 
 Environment variables:
   USER_UID      Host user ID to use inside the container (default: current user).
@@ -70,13 +71,15 @@ Run with no command to start Kimi.
 EOF
 }
 
-# Load the selected project from environment variables or from projects.yaml.
 load_project() {
-  # If name and root are exported, trust them.  PROJECT_AGENTS_DIR is optional
-  # and defaults to <devbox-root>/kimi-agents/<PROJECT_NAME>.
   if [[ -n "${PROJECT_NAME:-}" && -n "${PROJECT_ROOT_DIR:-}" ]]; then
     PROJECT_AGENTS_DIR="${PROJECT_AGENTS_DIR:-$DEVBOX_ROOT/kimi-agents/${PROJECT_NAME}}"
+    PROJECT_SERVICE="${PROJECT_SERVICE:-}"
+    PROJECT_COMPOSE_PROJECT="${PROJECT_COMPOSE_PROJECT:-}"
+    PROJECT_COMPOSE_FILES="${PROJECT_COMPOSE_FILES:-}"
+    PROJECT_ENV_FILES="${PROJECT_ENV_FILES:-}"
     export PROJECT_NAME PROJECT_ROOT_DIR PROJECT_AGENTS_DIR
+    export PROJECT_SERVICE PROJECT_COMPOSE_PROJECT PROJECT_COMPOSE_FILES PROJECT_ENV_FILES
     return 0
   fi
 
@@ -94,10 +97,14 @@ load_project() {
   PROJECT_NAME="$SELECTED_PROJECT_NAME"
   PROJECT_ROOT_DIR="$SELECTED_PROJECT_ROOT"
   PROJECT_AGENTS_DIR="$SELECTED_PROJECT_AGENTS"
+  PROJECT_SERVICE="$SELECTED_PROJECT_SERVICE"
+  PROJECT_COMPOSE_PROJECT="$SELECTED_PROJECT_COMPOSE_PROJECT"
+  PROJECT_COMPOSE_FILES="$SELECTED_PROJECT_COMPOSE_FILES"
+  PROJECT_ENV_FILES="$SELECTED_PROJECT_ENV_FILES"
   export PROJECT_NAME PROJECT_ROOT_DIR PROJECT_AGENTS_DIR
+  export PROJECT_SERVICE PROJECT_COMPOSE_PROJECT PROJECT_COMPOSE_FILES PROJECT_ENV_FILES
 }
 
-# Ensure the project root exists and the agents directory can be created.
 ensure_paths() {
   if [[ ! -d "$PROJECT_ROOT_DIR" ]]; then
     echo "Error: project root does not exist: $PROJECT_ROOT_DIR" >&2
@@ -108,28 +115,97 @@ ensure_paths() {
   mkdir -p "$DEVBOX_ROOT/.docker_data/kimi-home/$PROJECT_NAME"
 }
 
-# Show the project name in the terminal window/tab title so multiple
-# concurrent Kimi sessions are easy to tell apart.  The OSC escape is sent
-# to /dev/tty so it never pollutes piped command output.
 set_terminal_title() {
   if [[ -w /dev/tty ]]; then
-    printf '\033]0;kimi: %s\007' "$PROJECT_NAME" > /dev/tty 2>/dev/null || true
+    { printf '\033]0;kimi: %s\007' "$PROJECT_NAME" > /dev/tty; } 2>/dev/null || true
   fi
 }
 
-run_container() {
-  # Use a project-specific Compose project name so multiple projects can run
-  # at the same time without container-name collisions.
-  set_terminal_title
-  exec docker compose \
-    --file "$COMPOSE_FILE" \
-    --project-name "kimi-${PROJECT_NAME}" \
-    run --rm "$SERVICE_NAME" "$@"
+absolute_project_path() {
+  local path="$1"
+  if [[ "$path" != /* ]]; then
+    path="$PROJECT_ROOT_DIR/$path"
+  fi
+  printf '%s' "$path"
 }
 
-# Build the image with plain docker build so no project selection (and no
-# Compose variable interpolation) is required.  Tags the same fixed image
-# name that compose.yaml references.
+configure_compose() {
+  PROJECT_COMPOSE_ARGS=()
+  KIMI_COMPOSE_ARGS=()
+  PROJECT_RUN_ARGS=(--rm)
+
+  if [[ -z "$PROJECT_COMPOSE_FILES" ]]; then
+    if [[ -n "$PROJECT_SERVICE" || -n "$PROJECT_COMPOSE_PROJECT" || -n "$PROJECT_ENV_FILES" ]]; then
+      echo "Error: Compose options require PROJECT_COMPOSE_FILES" >&2
+      return 1
+    fi
+
+    KIMI_COMPOSE_ARGS=(
+      --file "$COMPOSE_FILE"
+      --project-name "kimi-${PROJECT_NAME}"
+    )
+    return 0
+  fi
+
+  if [[ -z "$PROJECT_SERVICE" ]]; then
+    echo "Error: service is required when compose_files is configured" >&2
+    return 1
+  fi
+
+  PROJECT_COMPOSE_PROJECT="${PROJECT_COMPOSE_PROJECT:-$PROJECT_NAME}"
+  export PROJECT_COMPOSE_PROJECT
+  PROJECT_RUN_ARGS+=(--no-deps)
+
+  PROJECT_COMPOSE_ARGS=(
+    --project-directory "$PROJECT_ROOT_DIR"
+    --project-name "$PROJECT_COMPOSE_PROJECT"
+  )
+
+  local file absolute_path
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    absolute_path="$(absolute_project_path "$file")"
+    if [[ ! -f "$absolute_path" ]]; then
+      echo "Error: env file does not exist: $absolute_path" >&2
+      return 1
+    fi
+    PROJECT_COMPOSE_ARGS+=(--env-file "$absolute_path")
+  done <<< "$PROJECT_ENV_FILES"
+
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    absolute_path="$(absolute_project_path "$file")"
+    if [[ ! -f "$absolute_path" ]]; then
+      echo "Error: Compose file does not exist: $absolute_path" >&2
+      return 1
+    fi
+    PROJECT_COMPOSE_ARGS+=(--file "$absolute_path")
+  done <<< "$PROJECT_COMPOSE_FILES"
+
+  KIMI_COMPOSE_ARGS=(
+    "${PROJECT_COMPOSE_ARGS[@]}"
+    --file "$PROJECT_COMPOSE_FILE"
+  )
+}
+
+resolve_project_image() {
+  local image
+  if ! image="$(docker compose "${PROJECT_COMPOSE_ARGS[@]}" config --images "$PROJECT_SERVICE")"; then
+    echo "Error: could not resolve image for Compose service '$PROJECT_SERVICE'" >&2
+    return 1
+  fi
+
+  if [[ -z "$image" || "$image" == *$'\n'* ]]; then
+    echo "Error: expected one image for Compose service '$PROJECT_SERVICE', got:" >&2
+    printf '%s\n' "${image:-<none>}" >&2
+    return 1
+  fi
+
+  PROJECT_BASE_IMAGE="$image"
+  KIMI_PROJECT_IMAGE="kimi-${PROJECT_NAME}:latest"
+  export PROJECT_BASE_IMAGE KIMI_PROJECT_IMAGE
+}
+
 build_image() {
   docker build \
     --build-arg "KIMI_VERSION=${KIMI_VERSION}" \
@@ -138,8 +214,54 @@ build_image() {
     "$DEVBOX_ROOT/.docker"
 }
 
-# Make sure the persistent home parent directory exists before compose tries to
-# mount project-specific Kimi home directories.
+build_kimi_project_image() {
+  docker compose "${KIMI_COMPOSE_ARGS[@]}" build --no-cache "$SERVICE_NAME"
+}
+
+build_project() {
+  if [[ -z "$PROJECT_COMPOSE_FILES" ]]; then
+    echo "Error: project '$PROJECT_NAME' has no compose_files configuration" >&2
+    return 1
+  fi
+
+  configure_compose
+  docker compose "${PROJECT_COMPOSE_ARGS[@]}" build "$PROJECT_SERVICE"
+  resolve_project_image
+  build_kimi_project_image
+}
+
+prepare_image() {
+  configure_compose
+
+  if [[ -z "$PROJECT_COMPOSE_FILES" ]]; then
+    if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+      build_image
+    fi
+    return 0
+  fi
+
+  resolve_project_image
+  if ! docker image inspect "$KIMI_PROJECT_IMAGE" >/dev/null 2>&1; then
+    echo "Building $KIMI_PROJECT_IMAGE from $PROJECT_BASE_IMAGE"
+    echo "Run './run-kimi.sh build-project' after changing the project image."
+    build_kimi_project_image
+  fi
+}
+
+run_container() {
+  set_terminal_title
+  exec docker compose \
+    "${KIMI_COMPOSE_ARGS[@]}" \
+    run "${PROJECT_RUN_ARGS[@]}" "$SERVICE_NAME" "$@"
+}
+
+launch_project() {
+  load_project
+  ensure_paths
+  prepare_image
+  run_container "$@"
+}
+
 mkdir -p "$DEVBOX_ROOT/.docker_data/kimi-home"
 
 if [[ "$#" -gt 0 ]]; then
@@ -154,28 +276,21 @@ if [[ "$#" -gt 0 ]]; then
       exit
       ;;
 
-    shell)
+    build-project)
       load_project
       ensure_paths
-      run_container bash
+      build_project
+      exit
+      ;;
+
+    shell)
+      launch_project bash
       ;;
 
     *)
-      load_project
-      ensure_paths
-      run_container "$@"
+      launch_project "$@"
       ;;
   esac
 fi
 
-# Default: start an interactive Kimi session.
-load_project
-ensure_paths
-
-# Build only if the image does not already exist. Run `./run-kimi.sh build` to
-# force a rebuild after changing the Dockerfile or context.
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  build_image
-fi
-
-run_container
+launch_project

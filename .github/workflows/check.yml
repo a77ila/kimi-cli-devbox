@@ -20,7 +20,9 @@ jobs:
           test -x scripts/select-project.sh
           test -f projects.yaml.example
           test -f .docker/Dockerfile
+          test -f .docker/Dockerfile.kimi
           test -f .docker/compose.yaml
+          test -f .docker/compose.project.yaml
           test -f .docker/entrypoint.sh
 
       - name: Install shellcheck
@@ -36,10 +38,21 @@ jobs:
             - name: foo
               root: /tmp/foo
               agents: /tmp/foo-agents
+              service: app
+              compose_project: foo-dev
+              compose_files:
+                - compose.yaml
+                - compose.dev.yaml
+              env_files:
+                - .env
             - name: bar
               root: /tmp/bar
           EOF
           mkdir -p /tmp/foo /tmp/bar /tmp/foo-agents
+          output="$(printf '1\n' | ./scripts/select-project.sh /tmp/test-projects.yaml)"
+          grep -q 'service: app' <<< "$output"
+          grep -q '/tmp/foo/compose.dev.yaml' <<< "$output"
+          grep -q '/tmp/foo/.env' <<< "$output"
           printf '2\n' | ./scripts/select-project.sh /tmp/test-projects.yaml | grep -q 'name:   bar'
 
   docker-build:
@@ -53,3 +66,14 @@ jobs:
 
       - name: Verify image starts
         run: docker run --rm kimi-cli-devbox-check bash -c 'kimi --version'
+
+      - name: Build project image layer
+        run: |
+          docker build \
+            --build-arg BASE_IMAGE=alpine:3.22 \
+            --tag kimi-cli-project-check \
+            --file .docker/Dockerfile.kimi \
+            .docker
+
+      - name: Verify project image starts
+        run: docker run --rm kimi-cli-project-check bash -c 'kimi --version'

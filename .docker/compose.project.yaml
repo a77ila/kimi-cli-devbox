@@ -1,0 +1,24 @@
+services:
+  isolated-kimi-cli:
+    container_name: isolated-kimi-cli-${PROJECT_NAME:?PROJECT_NAME is not set}
+    image: ${KIMI_PROJECT_IMAGE:?KIMI_PROJECT_IMAGE is not set}
+    build:
+      context: ${DEVBOX_ROOT:?DEVBOX_ROOT is not set}/.docker
+      dockerfile: Dockerfile.kimi
+      args:
+        - BASE_IMAGE=${PROJECT_BASE_IMAGE:?PROJECT_BASE_IMAGE is not set}
+        - KIMI_VERSION=${KIMI_VERSION:-latest}
+    working_dir: /workspace
+    environment:
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+      - PROJECT_NAME=${PROJECT_NAME:?PROJECT_NAME is not set}
+      - KIMI_CODE_HOME=/home/kimi/.kimi-code
+      - HOME=/home/kimi
+    volumes:
+      - ${PROJECT_ROOT_DIR:?PROJECT_ROOT_DIR is not set}:/workspace
+      - ${PROJECT_AGENTS_DIR:?PROJECT_AGENTS_DIR is not set}:/workspace/.kimi-code
+      - ${DEVBOX_ROOT:?DEVBOX_ROOT is not set}/.docker_data/kimi-home/${PROJECT_NAME:?PROJECT_NAME is not set}:/home/kimi
+    stdin_open: true
+    tty: true
+    command: kimi

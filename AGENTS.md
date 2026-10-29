@@ -53,6 +53,10 @@ config, credentials) is isolated per project under
   directory.
 - `name` must contain only lowercase letters, digits, underscores, and hyphens.
 - If `agents` is omitted, it defaults to `<devbox-root>/kimi-agents/<name>`.
+- A project can optionally set `service`, `compose_project`, `compose_files`,
+  and `env_files` to reuse its own Docker Compose environment. `service` and
+  `compose_files` are required together; Compose/env paths are relative to the
+  project root, and `compose_project` defaults to the project `name`.
 
 ### 2. Project selection
 
@@ -77,10 +81,17 @@ config, credentials) is isolated per project under
 
 ### 5. Docker image
 
-- All projects share a single image tagged `kimi-cli-devbox:latest`
-  (the `image:` key in `.docker/compose.yaml`).
-- `./run-kimi.sh build` builds it with plain `docker build` — no project
-  selection required.  The default run path builds it only if missing.
+- Projects without Compose options share the image tagged
+  `kimi-cli-devbox:latest` (the `image:` key in `.docker/compose.yaml`).
+- `./run-kimi.sh build` builds the shared image with plain `docker build` — no
+  project selection required. The run path builds it only if missing.
+- Compose-based projects resolve the selected service's image through
+  `docker compose config --images <service>`. `.docker/Dockerfile.kimi` layers
+  Kimi onto that image as `kimi-<project-name>:latest`.
+- `.docker/compose.project.yaml` is appended after the project's Compose files;
+  it lives in the devbox, so projects need no Kimi-specific files.
+- `./run-kimi.sh build-project` builds the selected project service and then
+  rebuilds its Kimi layer. The normal run path builds only a missing Kimi layer.
 
 ## Non-Functional Requirements
 
@@ -114,7 +125,9 @@ config, credentials) is isolated per project under
 ├── AGENTS.md             # this file — project definition for the launcher
 ├── .docker/
 │   ├── Dockerfile
+│   ├── Dockerfile.kimi
 │   ├── compose.yaml
+│   ├── compose.project.yaml
 │   └── entrypoint.sh
 └── .docker_data/
     └── kimi-home/        # per-project Kimi runtime data

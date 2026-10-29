@@ -1,0 +1,55 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+USER root
+
+RUN set -eu; \
+    if command -v apk >/dev/null 2>&1; then \
+      packages="bash ca-certificates curl git shadow su-exec sudo"; \
+      if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
+        packages="$packages nodejs npm"; \
+      fi; \
+      apk add --no-cache $packages; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+      packages="bash ca-certificates curl git passwd su-exec sudo"; \
+      if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
+        packages="$packages nodejs npm"; \
+      fi; \
+      apt-get update; \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $packages; \
+      rm -rf /var/lib/apt/lists/*; \
+    else \
+      echo "Unsupported base image: apk or apt-get is required" >&2; \
+      exit 1; \
+    fi
+
+ARG KIMI_VERSION=latest
+RUN npm install -g @moonshot-ai/kimi-code@${KIMI_VERSION}
+
+RUN set -eu; \
+    if ! getent group kimi >/dev/null 2>&1; then \
+      if [ -f /etc/alpine-release ]; then \
+        addgroup -S kimi; \
+      else \
+        groupadd kimi; \
+      fi; \
+    fi; \
+    if ! id kimi >/dev/null 2>&1; then \
+      if [ -f /etc/alpine-release ]; then \
+        adduser -S -G kimi -s /bin/bash -h /home/kimi kimi; \
+      else \
+        useradd -m -g kimi -s /bin/bash kimi; \
+      fi; \
+    fi; \
+    mkdir -p /home/kimi /workspace /etc/sudoers.d; \
+    chown kimi:kimi /home/kimi /workspace; \
+    echo "kimi ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/kimi; \
+    chmod 0440 /etc/sudoers.d/kimi
+
+WORKDIR /workspace
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["kimi"]
