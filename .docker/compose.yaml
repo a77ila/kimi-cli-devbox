@@ -1,15 +1,12 @@
 services:
   isolated-kimi-cli:
     container_name: isolated-kimi-cli-${PROJECT_NAME:?PROJECT_NAME is not set}
-    # Fixed image name so every project shares a single image and the
-    # build-if-missing check in run-kimi.sh works regardless of project.
-    image: kimi-cli-devbox:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - KIMI_VERSION=${KIMI_VERSION:-latest}
+    # Image built by run-kimi.sh: the shared kimi-cli-devbox:latest for
+    # projects without a custom base image, or kimi-cli-devbox-<name>:latest
+    # for projects that set `image` in projects.yaml.
+    image: ${KIMI_IMAGE:?KIMI_IMAGE is not set}
     working_dir: /workspace
+    network_mode: host
     environment:
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}

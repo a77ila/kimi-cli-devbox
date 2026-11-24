@@ -3,6 +3,33 @@
 All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-11-24
+
+### Added
+
+- Projects can set an optional `image` key in `projects.yaml` (or export
+  `PROJECT_IMAGE`) to choose a Docker base image for their container.  Kimi
+  Code and its Node.js runtime are installed on top of the base image, so a
+  project toolchain image (e.g. `php:8.3-cli`) provides `composer`,
+  `phpstan`, `phpunit`, etc. out of the box.  Supported base images are
+  Alpine and Debian/Ubuntu derivatives (`apk` or `apt-get`).
+- Projects with a custom base image get their own image tagged
+  `kimi-cli-devbox-<name>:latest`; the default run path rebuilds it
+  automatically when the base image or `KIMI_VERSION` changes (tracked via
+  image labels).
+- The Dockerfile is parameterised by `BASE_IMAGE`.  On apt-based images,
+  Node.js 22 is installed from the official nodejs.org tarball (Kimi Code
+  requires node >= 22.19; Debian/Ubuntu packages are older).
+
+### Changed
+
+- `./run-kimi.sh build` now builds the image for the selected project
+  (project selection is required, or export the selection variables).
+- `.docker/compose.yaml` no longer builds the image itself; it uses the
+  `KIMI_IMAGE` environment variable set by `run-kimi.sh`.
+- The container entrypoint drops privileges with `su-exec`, `gosu`, or
+  `runuser`, whichever is available in the base image.
+
 ## [0.2.3] - 2026-09-22
 
 ### Changed

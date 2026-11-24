@@ -66,9 +66,11 @@ Available projects:
   1) api-service
        root:   /home/you/src/api-service
        agents: /opt/develop/isolated-kimi-cli/kimi-agents/api-service
+       image:  (default)
   2) docs-site
        root:   /home/you/work/docs-site
        agents: /home/you/kimi-agents/docs-site
+       image:  (default)
 Select project (1-2):
 ```
 
@@ -106,10 +108,12 @@ projects:
   - name: my-app
     root: ~/src/my-app
     agents: ~/kimi-agents/my-app   # optional
+    image: php:8.3-cli             # optional
 
   - name: another-app
     root: /absolute/path/to/another-app
     # agents defaults to <devbox-root>/kimi-agents/another-app
+    # image defaults to the shared alpine-based image
 ```
 
 Rules:
@@ -117,8 +121,27 @@ Rules:
 - `name` and `root` are required.
 - `name` must contain only lowercase letters, digits, underscores, and hyphens.
 - If `agents` is omitted, it defaults to `<devbox-root>/kimi-agents/<name>`.
+- If `image` is set, the launcher builds a per-project image
+  (`kimi-cli-devbox-<name>:latest`) with Kimi Code installed on top of that
+  base image — see below.  If omitted, the project uses the shared default
+  image (`kimi-cli-devbox:latest`, based on `alpine:3.22`).
 - Relative paths are resolved against the devbox repository root.
 - `~` is expanded to the current user's home directory.
+
+## Custom base images per project
+
+Setting `image` lets a project bring its own toolchain into the container.
+For example, with `image: php:8.3-cli` the container already has PHP, and
+`composer`, `phpstan`, `phpunit`, etc. work as usual — Kimi Code and its
+Node.js runtime are installed on top of the base image at build time.
+
+- Supported base images are Alpine and Debian/Ubuntu derivatives (anything
+  with `apk` or `apt-get`).
+- The derived image is tagged `kimi-cli-devbox-<name>:latest` and is rebuilt
+  automatically when the base image or `KIMI_VERSION` changes; run
+  `./run-kimi.sh build` to force a rebuild.
+- The same base image can be set via the `PROJECT_IMAGE` environment variable
+  instead of `projects.yaml`.
 
 ## AI files for a project
 
@@ -153,8 +176,10 @@ running the script, as shown in Example 2 above.
 
 ## Customising the environment
 
-- `.docker/Dockerfile` — based on `alpine:3.20`; add language runtimes,
-  compilers, package managers, and system dependencies.
+- `.docker/Dockerfile` — parameterised by `BASE_IMAGE` (default
+  `alpine:3.22`); add language runtimes, compilers, package managers, and
+  system dependencies.  Per-project base images are selected with the `image`
+  key in `projects.yaml`.
 - `.docker/compose.yaml` — mount project directories, caches, and persistent
   volumes.  Project mounts are driven by environment variables set by
   `run-kimi.sh`.
