@@ -9,6 +9,7 @@
 #   SELECTED_PROJECT_NAME
 #   SELECTED_PROJECT_ROOT     (absolute path)
 #   SELECTED_PROJECT_AGENTS   (absolute path)
+#   SELECTED_PROJECT_IMAGE    (base image, empty when not configured)
 
 # Trim leading/trailing whitespace and surrounding quotes.
 __sp_trim_value() {
@@ -87,6 +88,7 @@ __sp_parse_yaml() {
   local -n _names="$2"
   local -n _roots="$3"
   local -n _agents="$4"
+  local -n _images="$5"
 
   local line indent indent_len
   local in_projects=false
@@ -128,11 +130,13 @@ __sp_parse_yaml() {
         _names[project_idx]=""
         _roots[project_idx]=""
         _agents[project_idx]=""
+        _images[project_idx]=""
 
         case "$key" in
           name) _names[project_idx]="$value" ;;
           root) _roots[project_idx]="$value" ;;
           agents) _agents[project_idx]="$value" ;;
+          image) _images[project_idx]="$value" ;;
         esac
       fi
       continue
@@ -148,6 +152,7 @@ __sp_parse_yaml() {
         name) _names[project_idx]="$value" ;;
         root) _roots[project_idx]="$value" ;;
         agents) _agents[project_idx]="$value" ;;
+        image) _images[project_idx]="$value" ;;
       esac
     fi
   done < "$yaml_file"
@@ -164,8 +169,8 @@ select_project() {
     return 1
   fi
 
-  local -a names roots agents
-  __sp_parse_yaml "$yaml_file" names roots agents
+  local -a names roots agents images
+  __sp_parse_yaml "$yaml_file" names roots agents images
 
   local count=${#names[@]}
   local i choice
@@ -189,6 +194,10 @@ select_project() {
       echo "Error: project '${names[i]}' is missing a root directory" >&2
       return 1
     fi
+    if [[ -n "${images[i]}" && "${images[i]}" =~ [[:space:]] ]]; then
+      echo "Error: image for project '${names[i]}' must not contain whitespace: '${images[i]}'" >&2
+      return 1
+    fi
   done
 
   echo "Available projects:"
@@ -199,6 +208,7 @@ select_project() {
     local agents_default
     agents_default="$(__sp_resolve_path "kimi-agents/${names[i]}" "$devbox_root")"
     printf '       agents: %s\n' "$(__sp_resolve_path "${agents[i]:-$agents_default}" "$devbox_root")"
+    printf '       image:  %s\n' "${images[i]:-(default)}"
   done
 
   while true; do
@@ -212,6 +222,7 @@ select_project() {
       i=$((choice - 1))
       SELECTED_PROJECT_NAME="${names[i]}"
       SELECTED_PROJECT_ROOT="$(__sp_resolve_path "${roots[i]}" "$devbox_root")"
+      SELECTED_PROJECT_IMAGE="${images[i]}"
 
       local agents_default
       agents_default="$(__sp_resolve_path "kimi-agents/${names[i]}" "$devbox_root")"
@@ -236,5 +247,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "  name:   $SELECTED_PROJECT_NAME"
     echo "  root:   $SELECTED_PROJECT_ROOT"
     echo "  agents: $SELECTED_PROJECT_AGENTS"
+    echo "  image:  ${SELECTED_PROJECT_IMAGE:-(default)}"
+  else
+    exit 1
   fi
 fi

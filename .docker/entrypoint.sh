@@ -29,4 +29,12 @@ export KIMI_CODE_HOME
 # must be left alone.
 chown -R "$USER_UID:$USER_GID" /home/"$USERNAME" 2>/dev/null || true
 
-exec su-exec "$USERNAME" "$@"
+# Drop privileges.  su-exec is available on Alpine, gosu on the Debian-based
+# images we build; runuser (util-linux) is the last resort.
+if command -v su-exec >/dev/null 2>&1; then
+  exec su-exec "$USERNAME" "$@"
+elif command -v gosu >/dev/null 2>&1; then
+  exec gosu "$USERNAME" "$@"
+else
+  exec runuser -u "$USERNAME" -- "$@"
+fi

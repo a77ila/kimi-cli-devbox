@@ -8,11 +8,19 @@
 #     - name: <short-project-name>
 #       root: <absolute-or-relative-path-to-project-root>
 #       agents: <absolute-or-relative-path-to-ai-files>  # optional
+#       image: <docker-base-image>                       # optional
 #
 # Rules:
-#   - name and root are required; agents is optional.
+#   - name and root are required; agents and image are optional.
 #   - name must contain only lowercase letters, digits, underscores, and hyphens.
 #   - If agents is omitted, it defaults to <launcher-root>/kimi-agents/<name>.
+#   - If image is set, the launcher builds a per-project image
+#     (kimi-cli-devbox-<name>:latest) with Kimi Code installed on top of that
+#     base image, so the project's toolchain (composer, phpstan, ...) is
+#     available inside the container.  Supported base images are Alpine and
+#     Debian/Ubuntu derivatives (anything with apk or apt-get).
+#   - If image is omitted, all such projects share the default image
+#     (kimi-cli-devbox:latest, based on alpine:3.22).
 #   - Relative paths are resolved against the launcher repository root.
 #   - ~ is expanded to the current user's home directory.
 
@@ -24,3 +32,9 @@ projects:
   - name: another-project
     root: /absolute/path/to/another-project
     # agents will default to <launcher-root>/kimi-agents/another-project
+
+  # A PHP project: Kimi Code is installed into the official PHP CLI image,
+  # so composer, phpstan, phpunit, etc. can be installed/used as usual.
+  - name: php-app
+    root: ~/src/php-app
+    image: php:8.3-cli

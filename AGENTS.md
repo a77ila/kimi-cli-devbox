@@ -39,7 +39,8 @@ config, credentials) is isolated per project under
 - **Target platform:** Linux (the container host).  macOS/Windows may work with
   adjustments but are not explicitly supported.
 - **Language / runtime:** Bash, Docker, Docker Compose.
-- **Key tools:** Alpine Linux base image, `npm` for installing Kimi CLI.
+- **Key tools:** Alpine Linux default base image (configurable per project),
+  `npm` for installing Kimi CLI.
 - **Hard constraints:** No host dependency beyond Bash, Docker, and standard
   POSIX utilities.  The target project root must be a directory on the host.
 
@@ -50,15 +51,17 @@ config, credentials) is isolated per project under
 - `projects.yaml` stores a list of projects.  It is gitignored.
 - `projects.yaml.example` is committed as documentation and a starting point.
 - Each project has a required `name` and `root`, plus an optional `agents`
-  directory.
+  directory and an optional `image` (Docker base image).
 - `name` must contain only lowercase letters, digits, underscores, and hyphens.
 - If `agents` is omitted, it defaults to `<devbox-root>/kimi-agents/<name>`.
+- If `image` is omitted, the project uses the shared default image based on
+  `alpine:3.22`.
 
 ### 2. Project selection
 
 - `run-kimi.sh` presents a numbered menu parsed from `projects.yaml`.
-- Selection can be bypassed by exporting `PROJECT_NAME`, `PROJECT_ROOT_DIR`, and
-  `PROJECT_AGENTS_DIR`.
+- Selection can be bypassed by exporting `PROJECT_NAME`, `PROJECT_ROOT_DIR`,
+  `PROJECT_AGENTS_DIR`, and optionally `PROJECT_IMAGE`.
 
 ### 3. Container mounts
 
@@ -77,10 +80,17 @@ config, credentials) is isolated per project under
 
 ### 5. Docker image
 
-- All projects share a single image tagged `kimi-cli-devbox:latest`
-  (the `image:` key in `.docker/compose.yaml`).
-- `./run-kimi.sh build` builds it with plain `docker build` — no project
-  selection required.  The default run path builds it only if missing.
+- Projects without a custom base image share one image tagged
+  `kimi-cli-devbox:latest`.
+- A project that sets `image` in `projects.yaml` (or `PROJECT_IMAGE`) gets a
+  per-project image tagged `kimi-cli-devbox-<name>:latest`, built from that
+  base image with Kimi Code and Node.js installed on top.
+- The Dockerfile is parameterised by `BASE_IMAGE` and supports Alpine (`apk`)
+  and Debian/Ubuntu (`apt-get`) base images.
+- `./run-kimi.sh build` builds the selected project's image with plain
+  `docker build`.  The default run path rebuilds automatically when the base
+  image or `KIMI_VERSION` changes (tracked via image labels), or when the
+  image is missing.
 
 ## Non-Functional Requirements
 
